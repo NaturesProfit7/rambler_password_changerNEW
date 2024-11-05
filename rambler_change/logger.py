@@ -6,4 +6,4 @@ CONSOLE_LOG_FORMAT = "<white>{time:HH:mm:ss}</white> | <level>{level: <8}</level
 
 def set_logger():
     logger.remove()
-    logger.add(lambda msg: tqdm.write(msg, end=''), colorize=True, format=CONSOLE_LOG_FORMAT)
+    logger.add(lambda msg: tqdm.write(msg, end=''), colorize=True, level="DEBUG", format=CONSOLE_LOG_FORMAT)

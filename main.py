@@ -8,7 +8,7 @@ from loguru import logger
 
 from rambler_change.logger import set_logger
 from rambler_change.scripts import check_and_create_files, read_data, change_password, update_api_key
-from rambler_change.scripts import login_rambler, ask_use_proxy, create_context, generate_valid_password, load_config
+from rambler_change.scripts import login_rambler, ask_use_proxy, create_context, generate_valid_password, load_config, get_page_cookies
 
 
 async def main():
@@ -30,14 +30,15 @@ async def main():
                     context, page = await create_context(playwright, use_proxy, account.proxy)
                     new_password = generate_valid_password()
                     await login_rambler(account.email, account.password, account.proxy, page)
-                    success = await change_password(page, context, account.email, account.password, new_password)
-                    if success:
-                        with open(PATH_NEW_LIST, 'a') as new_file:
-                            new_file.write(f"{account.email}:{new_password}\n")
-                    else:
-                        with open(PATH_NEW_LIST, 'a') as new_file:
+                    success, cookies_json = await change_password(page, context, account.email, account.password,
+                                                                  new_password)
+                    with open(PATH_NEW_LIST, 'a') as new_file:
+                        if success:
+                            # Записываем email, новый пароль и куки JSON в одну строку
+                            new_file.write(f"{account.email}:{new_password}:{cookies_json}\n")
+                        else:
                             new_file.write(f"{account.email}:{new_password}:WARNING\n")
-                        logger.error(f"{account.email}: Не удалось сменить пароль для пользователя")
+                            logger.error(f"{account.email}: Не удалось сменить пароль для пользователя")
                     pbar.update(1)
 
 

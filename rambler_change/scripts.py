@@ -168,9 +168,9 @@ async def change_password(page: Page, context: BrowserContext, login: str, passw
     try:
         while attempts < max_attempts:
             # Шаг 1: Нажимаем на "Контрольный вопрос"
-           # await page.get_by_label("Контрольный вопрос", exact=True).click()
+            await page.locator('//*[@id = "question"]').wait_for(state='visible', timeout=5000)
             await page.locator('//*[@id = "question"]').click()
-           # await asyncio.sleep(0.3)
+            await asyncio.sleep(1)
 
             # Шаг 2: Выбираем "Любимое блюдо" в качестве вопроса
             await page.get_by_text("Любимое блюдо").click()

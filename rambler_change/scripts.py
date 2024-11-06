@@ -154,18 +154,70 @@ async def solve_captcha(page: Page):
             return True
 
 
-async def change_password(page: Page, context: BrowserContext, login: str, password: str, new_password: str) -> tuple[bool, str]:
+import json
+from playwright.async_api import Page, BrowserContext
+
+import json
+from playwright.async_api import Page, BrowserContext
+
+
+async def change_password(page: Page, context: BrowserContext, login: str, password: str, new_password: str,
+                          new_secret_word: str) -> tuple[bool, str]:
     attempts = 0
     max_attempts = 5
     try:
         while attempts < max_attempts:
+            # Шаг 1: Нажимаем на "Контрольный вопрос"
+           # await page.get_by_label("Контрольный вопрос", exact=True).click()
+            await page.locator('//*[@id = "question"]').click()
+           # await asyncio.sleep(0.3)
+
+            # Шаг 2: Выбираем "Любимое блюдо" в качестве вопроса
+            await page.get_by_text("Любимое блюдо").click()
+
+            # Шаг 3: Вводим секретное слово в ответ на вопрос
+            await page.locator('//*[@id="answer"]').fill(new_secret_word)
+
+            # Шаг 4: Вводим текущий пароль
+            await page.locator('//*[@id="password"]').fill(password)
+
+            # Шаг 5: Проходим капчу
+            captcha_result = await is_frame_exist(page)
+            if captcha_result:
+                # Шаг 6: Нажимаем "Сохранить" для смены секретного слова
+                await page.get_by_role("button", name="Сохранить").click()
+                await asyncio.sleep(1)
+
+                # Проверка успешности изменения секретного слова
+                secret_success = await notification_secret_change(page)
+                if secret_success:
+                    logger.success(f'{login}: секретное слово успешно изменено!')
+                else:
+                    logger.error(f'{login}: ошибка при изменении секретного слова. Повторяю попытку.')
+                    await page.reload()
+                    await asyncio.sleep(2)
+                    attempts += 1
+                    continue  # Переход к следующей попытке при неудаче
+            else:
+                logger.warning("Капча не была решена! Перезагружаю страницу и повторяю попытку.")
+                await page.reload()
+                await asyncio.sleep(2)
+                attempts += 1
+                continue
+
+            # Переход к изменению пароля после успешного изменения секретного слова
+            await page.locator('//a[@href="/account/change-password"][@class]').wait_for(state='visible',
+                                                                                         timeout=120000)
+            await page.locator('//a[@href="/account/change-password"][@class]').click()
             await page.locator('//*[@id="password"]').fill(password)
             await page.locator('//*[@id="newPassword"]').fill(new_password)
+
             captcha_result = await is_frame_exist(page)
             if captcha_result:
                 await page.locator('//button[@data-cerber-id="profile::change_password::save_password_button"]').click()
                 await asyncio.sleep(1)
 
+                # Проверка успешности изменения пароля
                 success = await notification_password_change(page)
                 if success:
                     logger.success(f'{login}: пароль успешно изменён!')
@@ -177,16 +229,24 @@ async def change_password(page: Page, context: BrowserContext, login: str, passw
                     logger.error(f'{login}: ошибка при изменении пароля. Повторяю попытку.')
                     await page.reload()
                     await asyncio.sleep(2)
-            else:
-                logger.warning("Капча не была решена! Перезагружаю страницу и повторяю попытку.")
-                await page.reload()
-                await asyncio.sleep(2)
-            attempts += 1
-        logger.error(f"{login}: Превышено количество попыток смены пароля.")
+                    attempts += 1
+
+        logger.error(f"{login}: Превышено количество попыток смены секретного слова или пароля.")
         return False, ""  # Возвращаем неуспешный результат и пустую строку для куки
+
     finally:
         if context:
             await context.close()
+
+async def notification_secret_change(page: Page) -> bool:
+    """Проверяет успешное изменение секретного слова."""
+    try:
+        # Ожидание появления сообщения "Секретный вопрос успешно изменен"
+        await page.locator("div").filter(has_text="Секретный вопрос успешно изменен").nth(1).wait_for(state="visible", timeout=6000)
+        return True
+    except Exception as e:
+        logger.error("Секретное слово не изменено, неизвестная ошибка.")
+        return False
 
 
 async def notification_password_change(page: Page) -> bool:
@@ -251,15 +311,15 @@ async def login_rambler(login: str, password: str, proxy: Proxy, page):
             logger.error(f"Ошибка при попытке входа для пользователя {login}: {str(e)}")
             return False  # Выход из функции в случае ошибки при входе
 
-    # Переход на страницу смены пароля после успешного входа
+    # Переход на страницу смены секретного слова после успешного входа
     try:
-        logger.debug("Переход на страницу смены пароля.")
-        await page.locator('//a[@href="/account/change-password"][@class]').wait_for(state='visible', timeout=120000)
-        await page.locator('//a[@href="/account/change-password"][@class]').click()
-        logger.info("Открыта страница смены пароля.")
+        logger.debug("Переход на страницу смены секретного слова.")
+        await page.locator('//a[@href="/account/change-question"][@class]').wait_for(state='visible', timeout=120000)
+        await page.locator('//a[@href="/account/change-question"][@class]').click()
+        logger.info("Открыта страница смены секретного слова.")
         return True
     except Exception as e:
-        logger.error(f"Ошибка при переходе на страницу смены пароля: {str(e)}")
+        logger.error(f"Ошибка при переходе на страницу смены секретного слова: {str(e)}")
         return False
 
 
